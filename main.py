@@ -37,7 +37,7 @@ st.markdown("""
 # Sidebar
 with st.sidebar:
     st.markdown("### 🌿 Settings")
-    crop_choice = st.selectbox("Select a crop", ["🌾 Wheat", "🌽 Maize", "🥔 Potato", "🍅 Tomato", "🍚 Rice", "🧅 Onion","🌶️ Chili","🥒 Cucumber","🥦 Cauliflower","🥕 Carrot","🍆 Brinjal (Eggplant)","🥭 Mango","🍌 Banana","🥜 Groundnut","🌻 Sunflower","🌴 Coconut","🍬 Sugarcane","🫘 Soybean","🍊 Orange", "Other"])
+    crop_choice = st.selectbox("Select a crop", ["🍇 Grapes","🌾 Wheat", "🌽 Maize", "🥔 Potato", "🍅 Tomato", "🍚 Rice", "🧅 Onion","🌶️ Chili","🥒 Cucumber","🥦 Cauliflower","🥕 Carrot","🍆 Brinjal (Eggplant)","🥭 Mango","🍌 Banana","🥜 Groundnut","🌻 Sunflower","🌴 Coconut","🍬 Sugarcane","🫘 Soybean","🍊 Orange", "Other"])
     location = st.text_input("📍 Enter your district/city", "Solapur")
     
     # Weather API call
