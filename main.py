@@ -1,7 +1,8 @@
 import streamlit as st
 import time
+import requests
 from app.chat_utils import get_chat_model, ask_chat_model
-from app.config import EURI_API_KEY
+from app.config import EURI_API_KEY, OPENWEATHER_API_KEY
 
 # Page config
 st.set_page_config(
@@ -11,39 +12,15 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# Custom CSS for chat styling
+# Custom CSS
 st.markdown("""
 <style>
-    .chat-message {
-        padding: 1rem;
-        border-radius: 0.5rem;
-        margin-bottom: 1rem;
-        display: flex;
-        flex-direction: column;
-    }
-    .chat-message.user {
-        background-color: #2e7d32;
-        color: white;
-    }
-    .chat-message.assistant {
-        background-color: #f1f8e9;
-        color: black;
-    }
-    .stButton > button {
-        background-color: #388e3c;
-        color: white;
-        border-radius: 0.5rem;
-        border: none;
-        padding: 0.6rem 1.2rem;
-        font-weight: bold;
-    }
-    .stButton > button:hover {
-        background-color: #2e7d32;
-    }
+    .chat-message.user { background-color: #2e7d32; color: white; padding: 1rem; border-radius: 0.5rem; margin: 0.5rem 0; }
+    .chat-message.assistant { background-color: #f1f8e9; color: black; padding: 1rem; border-radius: 0.5rem; margin: 0.5rem 0; }
 </style>
 """, unsafe_allow_html=True)
 
-# Initialize session state
+# Session state
 if "messages" not in st.session_state:
     st.session_state.messages = []
 if "chat_model" not in st.session_state:
@@ -51,71 +28,89 @@ if "chat_model" not in st.session_state:
 
 # Header
 st.markdown("""
-<div style="text-align: center; padding: 2rem 0;">
-    <h1 style="color: #2e7d32; font-size: 3rem; margin-bottom: 0.5rem;">🌱 AgroBot</h1>
-    <p style="font-size: 1.2rem; color: #666; margin-bottom: 2rem;">
-        Your Intelligent Farming Assistant 🌾<br>
-        Ask me about crops, fertilizers, pests, and best practices!
-    </p>
+<div style="text-align:center; padding:1.5rem;">
+    <h1 style="color:#2e7d32;">🌱 AgroBot</h1>
+    <p>Your Intelligent Farming Assistant 🌾</p>
 </div>
 """, unsafe_allow_html=True)
 
-# Sidebar (extras)
+# Sidebar
 with st.sidebar:
-    st.markdown("### 🌿 Quick Options")
+    st.markdown("### 🌿 Settings")
     crop_choice = st.selectbox("Select a crop", ["🌾 Wheat", "🌽 Maize", "🥔 Potato", "🍅 Tomato", "🍚 Rice", "Other"])
-    st.markdown("You can ask me about diseases, fertilizers, or weather tips for your crop.")
+    location = st.text_input("📍 Enter your district/city", "Solapur")
+    
+    # Weather API call
+    def get_weather(city):
+        url = f"http://api.openweathermap.org/data/2.5/forecast?q={city}&appid={OPENWEATHER_API_KEY}&units=metric"
+        try:
+            response = requests.get(url)
+            data = response.json()
+            if data.get("cod") != "200":
+                return None
+            return data
+        except:
+            return None
+    
+    weather_data = None
+    if st.button("☁️ Get Weather Forecast"):
+        with st.spinner("Fetching weather..."):
+            weather_data = get_weather(location)
+            if weather_data:
+                today = weather_data["list"][0]
+                st.success(f"🌦 Weather in {location}: {today['weather'][0]['description'].title()}, 🌡 {today['main']['temp']}°C")
+                st.markdown("#### 📅 Next 5 Days")
+                for i in range(0, 40, 8):  # every 24 hours
+                    day = weather_data["list"][i]
+                    date = day["dt_txt"].split(" ")[0]
+                    desc = day["weather"][0]["description"].title()
+                    temp = day["main"]["temp"]
+                    st.write(f"**{date}** → {desc}, 🌡 {temp}°C")
+            else:
+                st.error("⚠️ Could not fetch weather. Please check city name or API key.")
 
-# Display chat history
+# Display chat
 st.markdown("### 💬 Chat with AgroBot")
 for message in st.session_state.messages:
-    role = message["role"]
-    with st.chat_message(role):
+    with st.chat_message(message["role"]):
         st.markdown(message["content"])
         st.caption(message["timestamp"])
 
 # Chat input
-if prompt := st.chat_input("Ask AgroBot anything about farming..."):
-    # Add user message
+if prompt := st.chat_input("Ask AgroBot about crops, weather, or farming..."):
     timestamp = time.strftime("%H:%M")
-    st.session_state.messages.append({
-        "role": "user", 
-        "content": prompt, 
-        "timestamp": timestamp
-    })
+    st.session_state.messages.append({"role": "user", "content": prompt, "timestamp": timestamp})
     with st.chat_message("user"):
         st.markdown(prompt)
         st.caption(timestamp)
-    
-    # Generate response
+
+    # Assistant reply
     with st.chat_message("assistant"):
         with st.spinner("🌾 Thinking..."):
+            weather_context = ""
+            if weather_data:
+                today_weather = weather_data["list"][0]
+                weather_context = f"""
+                Current Weather in {location}: {today_weather['weather'][0]['description']} with temperature {today_weather['main']['temp']}°C.
+                """
+            
             system_prompt = f"""
-            You are AgroBot, a friendly farming assistant. 
-            Provide accurate, simple, and practical advice for farmers in India.
-            Be conversational and supportive. 
-            Crop selected by user: {crop_choice}
-            
+            You are AgroBot, a friendly farming assistant for Indian farmers.
+            Crop selected: {crop_choice}.
+            Use weather info if available.
+
+            {weather_context}
+
             User Question: {prompt}
-            
+
             Answer:
             """
             response = ask_chat_model(st.session_state.chat_model, system_prompt)
         
         st.markdown(response)
         st.caption(timestamp)
-        
-        # Save assistant reply
-        st.session_state.messages.append({
-            "role": "assistant", 
-            "content": response, 
-            "timestamp": timestamp
-        })
+        st.session_state.messages.append({"role": "assistant", "content": response, "timestamp": timestamp})
 
 # Footer
 st.markdown("---")
-st.markdown("""
-<div style="text-align: center; color: #666; font-size: 0.9rem;">
-    <p>🤖 Powered by Euri AI | 🌱 Helping Farmers Grow Better</p>
-</div>
-""", unsafe_allow_html=True)
+st.markdown("<div style='text-align:center; color:#666;'>🤖 Powered by Euri AI | 🌱 Helping Farmers Grow Better</div>", unsafe_allow_html=True)
